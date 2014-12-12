@@ -16,6 +16,7 @@ public class UAnimation :MonoBehaviour{
 
 	private bool _islocal=true;
 	private float _currentTime=0;
+	private float _delaySeconds=0;
 
 	private System.Action _onComplete;
 
@@ -47,6 +48,11 @@ public class UAnimation :MonoBehaviour{
 
 	public UAnimation Ease(EaseType easeType){
 		_type=easeType;
+		return this;
+	}
+
+	public UAnimation Delay(float seconds){
+		_delaySeconds=seconds;
 		return this;
 	}
 
@@ -90,12 +96,22 @@ public class UAnimation :MonoBehaviour{
 			return EaseInQuad(t);
 		case EaseType.EaseOutQuad:
 			return EaseOutQuad(t);
+		case EaseType.EaseInOutQuad:
+			return EaseInOutQuad(t);
+		case EaseType.EaseInElastic:
+			return UAnimation.EaseInElastic(t);
+		case EaseType.EaseOutElastic:
+			return UAnimation.EaseOutElastic(t);
 		}
 		return t;
 	}
 
 	void Update(){
 		if(!_isRunning){
+			return;
+		}
+		_delaySeconds-=Time.deltaTime;
+		if(_delaySeconds>0){
 			return;
 		}
 		bool stop=false;
@@ -105,7 +121,9 @@ public class UAnimation :MonoBehaviour{
 		}
 		float t=EaseValue(_currentTime/_seconds);
 		if(_targetPos!=null){
-			Vector3 pos=Vector3.Lerp(_startPos,(Vector3)_targetPos,t);
+
+			Vector3 pos=_startPos+((Vector3)_targetPos-_startPos)*t;
+
 			if(_islocal){
 				transform.localPosition=pos;
 			}else{
@@ -114,8 +132,8 @@ public class UAnimation :MonoBehaviour{
 		}
 
 		if(_targetRotation!=null){
-			Quaternion rotation=Quaternion.Lerp(
-				Quaternion.Euler(_startPos),Quaternion.Euler((Vector3)_targetPos),t);
+
+			Quaternion rotation=Quaternion.Euler( _startRotation+((Vector3)_targetRotation-_startRotation)*t);
 			if(_islocal){
 				transform.localRotation=rotation;
 			}else{
@@ -124,7 +142,7 @@ public class UAnimation :MonoBehaviour{
 		}
 
 		if(_targetScale!=null){
-			Vector3 scale=Vector3.Lerp(_startScale,(Vector3)_targetScale,t);
+			Vector3 scale=_startScale+((Vector3)_targetScale-_startScale)*t;
 			transform.localScale=scale;
 		}
 		_currentTime+=Time.deltaTime;
@@ -178,12 +196,46 @@ public class UAnimation :MonoBehaviour{
 		return -0.5f*(t*t*t*t-2);
 	}
 
+	private static float EaseInElastic(float t){
+		if(t==0||t==1){
+			return t;
+		}
+		float p=0.3f;
+		return -Mathf.Pow(2,10*(t-=1))*Mathf.Sin(t*2*Mathf.PI/p);
+	}
+
+	private static float EaseOutElastic(float t){
+		float b=0;
+		float c=1;
+		float d=1;
+		float a=0;
+		float p=0;
+		float s=0;
+		if (t==0) return b;  if ((t/=d)==1) return b+c;  if (p==0) p=d*.3f;
+		if (a < Mathf.Abs(c)) {
+			a=c;  s=p/4; }
+		else {
+			s = p/(2*Mathf.PI) * Mathf.Asin (c/a);
+		}
+		return a*Mathf.Pow(2,-10*t) * Mathf.Sin( (t*d-s)*(2*Mathf.PI)/p ) + c + b;
+	}
 
 	public static UAnimation Make(GameObject o){
 		UAnimation anim=o.AddComponent<UAnimation>();
 		return anim;
 	}
 
+
+	public static UAnimation[] GetAnimtions(GameObject o){
+		return o.GetComponents<UAnimation>();
+	}
+
+	public static void RemoveAllAnimations(GameObject o){
+		UAnimation[] anims=GetAnimtions(o);
+		foreach(UAnimation a in anims){
+			Destroy(a);
+		}
+	}
 
 
 	public enum EaseType{
@@ -194,6 +246,7 @@ public class UAnimation :MonoBehaviour{
 		EaseInCubic,
 		EaseOutCubic,
 		EaseInOutCubic,
-
+		EaseInElastic,
+		EaseOutElastic,
 	}
 }

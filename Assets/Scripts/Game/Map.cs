@@ -73,7 +73,7 @@ public class Map {
 	}
 
 
-	private void GenerateUnknownCell(int unknowCnt){
+	private void GenerateUnknownCell(int unknowCnt,int depth){
 		List<Cell> showedCells=new List<Cell>();
 		for(int i=0;i<_numbers.Length;i++){
 			Cell[] row=_numbers[i];
@@ -84,11 +84,10 @@ public class Map {
 
 		for(int i=0;i<unknowCnt;i++){
 			int rd=Random.Range(0,showedCells.Count);
-
 			bool find=false;
 			for(int idx=0;idx<showedCells.Count;idx++){
 				Cell cell=showedCells[(rd+idx)%showedCells.Count];
-				if(CalculateVaildNumberCount(cell.row,cell.col)==1){
+				if(CheckCanBeRemoved(cell.row,cell.col,depth)){
 					showedCells.RemoveAt((rd+idx)%showedCells.Count);
 					cell.isShow=false;
 					find=true;
@@ -105,46 +104,99 @@ public class Map {
 	}
 
 
-	public void Generate(int level){
+	public void Generate(int level,int depth=1){
 		GenerateInHardMode();
-		GenerateUnknownCell(level);
+		GenerateUnknownCell(level,depth);
 	}
 
-	private int CalculateVaildNumberCount(int row,int col){
-		bool[] invaildNumbers=new bool[9];
+	private bool CheckCanBeRemoved(int row,int col,int depth){
+		HashSet<int> sets=CalculateVaildNumbers( row, col);
+		if(sets.Count==0){
+			return false;
+		}
+		if(sets.Count==1){
+			return true;
+		}
+		if(depth>0){
+			Cell cell=_numbers[row][col];
+			int vaildCnt=0;
+			foreach(int n in sets){
+				cell.userValue=n;
+				bool findError=false;
+				ForeachRelativeCell(row,col,delegate(Cell c) {
+					if(!c.isShow){
+						if(!CheckCanBeRemoved(c.row,c.col,depth-1)){
+							findError=true;
+							return true;
+						}
+					}
+					return false;
+				});
+
+				cell.userValue=cell.number;
+				if(!findError){
+					vaildCnt++;
+				}
+			}
+			if(vaildCnt>1){
+				return false;
+			}
+		}
+		return true;
+
+	}
+
+	private void ForeachRelativeCell(int row,int col,System.Func<Cell,bool> onVisitor){
 		for(int i=0;i<9;i++){
 			Cell cell=_numbers[row][i];
-			if(cell.isShow&&i!=col){
-				invaildNumbers[cell.number-1]=true;
+			if(i!=col){
+				if(onVisitor(cell)){
+					return;
+				}
 			}
 		}
-
+		
 		for(int i=0;i<9;i++){
 			Cell cell=_numbers[i][col];
-			if(cell.isShow&&i!=row){
-				invaildNumbers[cell.number-1]=true;
+			if(i!=row){
+				if(onVisitor(cell)){
+					return;
+				}
 			}
 		}
-
+		
 		int parentRow=row/3;
 		int parentCol=col/3;
-
+		
 		for(int i=0;i<9;i++){
 			int rowIdx=parentRow*3+i/3;
 			int colIdx=parentCol*3+i%3;
 			Cell cell=_numbers[rowIdx][colIdx];
-			if(cell.isShow&&(rowIdx!=row||colIdx!=col)){
+			if((rowIdx!=row||colIdx!=col)){
+				if(onVisitor(cell)){
+					return;
+				}
+			}
+		}
+	}
+
+	private HashSet<int> CalculateVaildNumbers(int row,int col){
+
+		bool[] invaildNumbers=new bool[9];
+		ForeachRelativeCell(row,col,delegate(Cell cell) {
+			if(cell.isShow){
 				invaildNumbers[cell.number-1]=true;
 			}
-		}
+			return false;
+		});
 
-		int vaildCnt=0;
+		HashSet<int> ret=new HashSet<int>();
 		for(int i=0;i<invaildNumbers.Length;i++){
 			if(!invaildNumbers[i]){
-				vaildCnt++;
+				ret.Add(i+1);
 			}
 		}
-		return vaildCnt;
+		return ret;
 	}
 
 	public int sizeX{
@@ -163,8 +215,47 @@ public class Map {
 		get{
 			return _numbers[i][j];
 		}
+		private set{
+			_numbers[i][j]=value;
+		}
 	}
 
+
+	public byte[] Save(){
+		System.Text.StringBuilder builder=new System.Text.StringBuilder();
+		for(int i=0;i<sizeX;i++){
+			for(int j=0;j<sizeY;j++){
+				Cell cell=this[i,j];
+				builder.Append(cell.isShow);
+				builder.Append(',');
+				builder.Append(cell.userValue);
+				builder.Append(',');
+				builder.Append(cell.number);
+				builder.Append('|');
+			}
+		}
+		return System.Text.Encoding.UTF8.GetBytes(builder.ToString());
+	}
+
+	public void Load(byte[] binary){
+		string str=System.Text.Encoding.UTF8.GetString(binary);
+		string[] cellStr=str.Split('|');
+		for(int i=0;i<cellStr.Length;i++){
+			if(string.IsNullOrEmpty(cellStr[i])){
+				continue;
+			}
+			string[] fields=cellStr[i].Split(',');
+			bool isShow=bool.Parse(fields[0]);
+			int userValue=int.Parse(fields[1]);
+			int number=int.Parse(fields[2]);
+
+			int row=i/SIZE;
+			int col=i%SIZE;
+			this[row,col]=new Cell(number,row,col);
+			this[row,col].userValue=userValue;
+			this[row,col].isShow=isShow;
+		}
+	}
 
 	public class Cell{
 
@@ -181,6 +272,7 @@ public class Map {
 			_col=col;
 			_userValue=number;
 		}
+
 
 		public void SetLocation(int row,int col){
 			_row=row;

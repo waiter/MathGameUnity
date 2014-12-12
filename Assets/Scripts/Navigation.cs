@@ -8,6 +8,9 @@ public class Navigation  {
 
 	private static Stack<string> _sceneStack=new Stack<string>();
 
+	public static event System.Action onPushStart;
+	public static event System.Action onPushEnd;
+
 	public static void Register(string sceneName,GameObject scene){
 		_scene.Add(sceneName,scene);
 	}
